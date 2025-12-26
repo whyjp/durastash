@@ -79,7 +79,7 @@ private:
     std::string current_session_id_;
     std::atomic<bool> heartbeat_running_;
     std::thread heartbeat_thread_;
-    std::mutex mutex_;
+    mutable std::mutex mutex_;  // const 멤버 함수에서도 사용 가능하도록 mutable 선언
     std::string current_group_key_;
     int64_t heartbeat_interval_ms_;
 

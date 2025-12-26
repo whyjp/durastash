@@ -25,7 +25,25 @@ DuraStash는 로그 전송 및 임시 백업을 위한 고가용성 저장소 �
 
 ## 빌드 방법
 
-```bash
+### 방법 1: 두 단계 빌드 (권장)
+
+RocksDB를 별도로 빌드한 후 DuraStash를 빌드합니다:
+
+```powershell
+# 1단계: RocksDB 사전 빌드
+.\scripts\build_rocksdb.ps1
+
+# 2단계: DuraStash 빌드 (사전 빌드된 RocksDB 사용)
+.\scripts\build.ps1 -UsePrebuiltRocksDB
+
+# 테스트 실행
+cd build
+ctest -C Release
+```
+
+### 방법 2: 서브모듈에서 직접 빌드
+
+```powershell
 # 서브모듈 초기화
 git submodule update --init --recursive
 
@@ -34,14 +52,16 @@ mkdir build
 cd build
 
 # CMake 구성
-cmake ..
+cmake .. -G "Visual Studio 18 2026" -A x64
 
 # 빌드
-cmake --build .
+cmake --build . --config Release
 
 # 테스트 실행 (선택사항)
-ctest
+ctest -C Release
 ```
+
+자세한 내용은 [scripts/README.md](scripts/README.md)를 참조하세요.
 
 ## 사용 예제
 

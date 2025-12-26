@@ -1,5 +1,6 @@
 # Build directories
 build/
+build_rocksdb/
 out/
 bin/
 lib/
