@@ -1,35 +1,59 @@
 #include <gtest/gtest.h>
 #include "durastash/group_storage.h"
+#include "test_utils.h"
 #include <filesystem>
 #include <fstream>
 #include <cstdlib>
 #include <ctime>
 
+#ifdef _WIN32
+#include <windows.h>
+#endif
+
 using namespace durastash;
+using namespace durastash::test_utils;
+
+// Windows에서 콘솔 출력 인코딩을 UTF-8로 설정
+namespace {
+    struct ConsoleEncodingSetter {
+        ConsoleEncodingSetter() {
+#ifdef _WIN32
+            // 콘솔 출력 코드 페이지를 UTF-8로 설정
+            SetConsoleOutputCP(65001);
+            // 콘솔 입력 코드 페이지도 UTF-8로 설정
+            SetConsoleCP(65001);
+#endif
+        }
+    };
+    // 전역 객체로 생성하여 프로그램 시작 시 자동 실행
+    ConsoleEncodingSetter g_console_encoding_setter;
+}
 
 class GroupStorageTest : public ::testing::Test {
 protected:
     void SetUp() override {
-        // 테스트용 임시 디렉토리 생성
-        std::srand(std::time(nullptr));
-        std::string test_dir = "test_db_" + std::to_string(std::rand());
-        test_db_path_ = std::filesystem::temp_directory_path() / test_dir;
-        std::filesystem::remove_all(test_db_path_);
-        std::filesystem::create_directories(test_db_path_);
+        // 테스트용 고유한 임시 디렉토리 생성 (테스트 간 격리 보장)
+        test_dir_guard_ = std::make_unique<TestDirectoryGuard>("test_db");
         
-        storage_ = std::make_unique<GroupStorage>(test_db_path_.string());
+        storage_ = std::make_unique<GroupStorage>(test_dir_guard_->GetPathString());
         ASSERT_TRUE(storage_->Initialize());
     }
 
     void TearDown() override {
+        // 저장소 종료 (RocksDB 파일 잠금 해제)
         if (storage_) {
             storage_->Shutdown();
+            storage_.reset();
         }
-        // 테스트 디렉토리 정리
-        std::filesystem::remove_all(test_db_path_);
+        
+        // 디렉토리 정리 (RAII로 자동 정리되지만 명시적으로 호출)
+        if (test_dir_guard_) {
+            test_dir_guard_->Cleanup();
+            test_dir_guard_.reset();
+        }
     }
 
-    std::filesystem::path test_db_path_;
+    std::unique_ptr<TestDirectoryGuard> test_dir_guard_;
     std::unique_ptr<GroupStorage> storage_;
 };
 

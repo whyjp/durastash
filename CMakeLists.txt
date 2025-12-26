@@ -175,8 +175,10 @@ if(BUILD_TESTS)
         endif()
     endif()
     
-    # 테스트 파일
+    # 테스트 파일 (헤더 파일 제외)
     file(GLOB TEST_SOURCES tests/*.cpp)
+    # 테스트 유틸리티 헤더를 포함 경로에 추가
+    include_directories(${CMAKE_CURRENT_SOURCE_DIR}/tests)
     
     foreach(TEST_FILE ${TEST_SOURCES})
         get_filename_component(TEST_NAME ${TEST_FILE} NAME_WE)
@@ -190,6 +192,10 @@ if(BUILD_TESTS)
             message(FATAL_ERROR "GTest target not found")
         endif()
         add_test(NAME ${TEST_NAME} COMMAND ${TEST_NAME})
+        # Windows에서 한글 출력을 위한 환경 변수 설정
+        if(WIN32)
+            set_property(TEST ${TEST_NAME} PROPERTY ENVIRONMENT "PYTHONIOENCODING=utf-8")
+        endif()
     endforeach()
 endif()
 

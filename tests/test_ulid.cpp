@@ -5,7 +5,24 @@
 #include <thread>
 #include <chrono>
 
+#ifdef _WIN32
+#include <windows.h>
+#endif
+
 using namespace durastash;
+
+// Windows에서 콘솔 출력 인코딩을 UTF-8로 설정
+namespace {
+    struct ConsoleEncodingSetter {
+        ConsoleEncodingSetter() {
+#ifdef _WIN32
+            SetConsoleOutputCP(65001);
+            SetConsoleCP(65001);
+#endif
+        }
+    };
+    ConsoleEncodingSetter g_console_encoding_setter;
+}
 
 TEST(ULIDTest, Generate) {
     std::string ulid = ULID::Generate();

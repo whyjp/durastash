@@ -5,6 +5,11 @@ REM Usage: run_tests.bat [Release|Debug]
 REM UTF-8 코드 페이지 설정 (한글 출력 깨짐 방지)
 chcp 65001 >nul 2>&1
 
+REM 콘솔 출력 코드 페이지를 UTF-8로 설정
+if exist "%SystemRoot%\System32\chcp.com" (
+    chcp 65001 >nul 2>&1
+)
+
 setlocal enabledelayedexpansion
 
 set BUILD_TYPE=Release
@@ -16,6 +21,7 @@ REM 프로젝트 루트 디렉토리
 set "SCRIPT_DIR=%~dp0"
 set "PROJECT_ROOT=%SCRIPT_DIR%.."
 set "BUILD_DIR=%PROJECT_ROOT%\build"
+set "BIN_DIR=%BUILD_DIR%\bin\%BUILD_TYPE%"
 
 echo === DuraStash 테스트 실행 ===
 echo 빌드 타입: %BUILD_TYPE%
@@ -27,13 +33,18 @@ if not exist "%BUILD_DIR%" (
     exit /b 1
 )
 
+REM 환경 변수 설정 (테스트 실행 파일에 UTF-8 인코딩 전달)
+set PYTHONIOENCODING=utf-8
+set LANG=ko_KR.UTF-8
+
 cd /d "%BUILD_DIR%"
 
-REM CTest 실행
+REM CTest 실행 (환경 변수와 함께)
 echo === CTest 실행 ===
 set CONFIG_NAME=%BUILD_TYPE%
 if "%BUILD_TYPE%"=="RelWithDebInfo" set CONFIG_NAME=RelWithDebInfo
 
+REM CTest 실행 시 코드 페이지 설정 유지
 ctest -C %CONFIG_NAME% --output-on-failure
 if errorlevel 1 (
     echo.
