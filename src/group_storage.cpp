@@ -123,6 +123,68 @@ bool GroupStorage::Save(const std::string& group_key, const std::string& data) {
     return storage_->Put(data_keys[0], data);
 }
 
+std::vector<std::string> GroupStorage::Load(const std::string& group_key) {
+    std::lock_guard<std::mutex> lock(mutex_);
+    
+    std::vector<std::string> results;
+    
+    if (!storage_ || !batch_manager_) {
+        return results;
+    }
+
+    // 세션 확인
+    auto it = group_sessions_.find(group_key);
+    if (it == group_sessions_.end()) {
+        return results;
+    }
+    
+    std::string session_id = it->second;
+
+    // 모든 배치 메타데이터 조회
+    std::string prefix = group_key + ":" + session_id + ":batch:";
+    std::vector<std::string> keys;
+    std::vector<std::string> values;
+    
+    storage_->ScanPrefix(prefix, keys, values);
+
+    // 배치 메타데이터를 sequence_start 순서로 정렬
+    std::vector<std::pair<int64_t, BatchMetadata>> batches;
+    for (size_t i = 0; i < keys.size(); ++i) {
+        BatchMetadata metadata;
+        try {
+            metadata.fromJson(values[i]);
+            batches.push_back({metadata.GetSequenceStart(), metadata});
+        } catch (...) {
+            continue;
+        }
+    }
+    
+    // sequence_start 순서로 정렬
+    std::sort(batches.begin(), batches.end(), 
+              [](const auto& a, const auto& b) {
+                  return a.first < b.first;
+              });
+
+    // 각 배치의 데이터를 순서대로 로드
+    for (const auto& [seq_start, metadata] : batches) {
+        std::vector<std::string> data_keys;
+        batch_manager_->GenerateDataKeys(group_key, session_id, 
+                                         metadata.GetBatchId(),
+                                         metadata.GetSequenceStart(),
+                                         metadata.GetSequenceEnd(),
+                                         data_keys);
+        
+        for (const auto& data_key : data_keys) {
+            std::string value;
+            if (storage_->Get(data_key, value)) {
+                results.push_back(value);
+            }
+        }
+    }
+
+    return results;
+}
+
 std::vector<BatchLoadResult> GroupStorage::LoadBatch(const std::string& group_key, size_t batch_size) {
     std::lock_guard<std::mutex> lock(mutex_);
     
@@ -241,8 +303,20 @@ bool GroupStorage::ResaveBatch(const std::string& group_key,
         storage_->PutToBatch(new_data_keys[i], remaining_data[i]);
     }
 
-    // 원본 배치 ACK (삭제)
-    batch_manager_->AcknowledgeBatch(group_key, session_id, batch_id);
+    // 원본 배치 삭제 (이미 배치가 시작된 상태이므로 직접 삭제)
+    std::string metadata_key = batch_manager_->MakeBatchMetadataKey(group_key, session_id, batch_id);
+    storage_->DeleteFromBatch(metadata_key);
+    
+    // 원본 배치의 모든 데이터 키 삭제
+    std::vector<std::string> old_data_keys;
+    batch_manager_->GenerateDataKeys(group_key, session_id, batch_id,
+                                    original_metadata.GetSequenceStart(),
+                                    original_metadata.GetSequenceEnd(),
+                                    old_data_keys);
+    
+    for (const auto& data_key : old_data_keys) {
+        storage_->DeleteFromBatch(data_key);
+    }
 
     // 배치 커밋
     return storage_->CommitBatch();

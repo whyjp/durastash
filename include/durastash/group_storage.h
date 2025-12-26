@@ -68,7 +68,17 @@ public:
     bool Save(const std::string& group_key, const std::string& data);
 
     /**
-     * 배치 단위 로드 (FIFO, 한번 Load된 배치는 재Load 불가)
+     * 기본 로드 (상태 변경 없음, 휘발성 읽기)
+     * 모든 데이터를 FIFO 순서로 반환
+     * @param group_key 그룹 키
+     * @return 데이터 목록 (FIFO 순서)
+     */
+    std::vector<std::string> Load(const std::string& group_key);
+
+    /**
+     * 배치 단위 로드 (트랜잭션 기반, 상태 변경 포함)
+     * 한번 Load된 배치는 재Load 불가 (PENDING → LOADED)
+     * 배치 ACK 처리를 위한 옵션 기능
      * @param group_key 그룹 키
      * @param batch_size 배치 크기
      * @return 배치 로드 결과 목록

@@ -165,3 +165,55 @@ TEST_F(GroupStorageTest, BatchSizeLimit) {
     EXPECT_EQ(batches[0].data.size(), 5); // 첫 번째 배치만 로드
 }
 
+TEST_F(GroupStorageTest, BasicLoad) {
+    std::string group_key = "test_group";
+    ASSERT_TRUE(storage_->InitializeSession(group_key));
+    
+    // 데이터 저장
+    ASSERT_TRUE(storage_->Save(group_key, "data1"));
+    ASSERT_TRUE(storage_->Save(group_key, "data2"));
+    ASSERT_TRUE(storage_->Save(group_key, "data3"));
+    
+    // 기본 로드 (상태 변경 없음, 모든 데이터)
+    auto values = storage_->Load(group_key);
+    ASSERT_EQ(values.size(), 3);
+    EXPECT_EQ(values[0], "data1");
+    EXPECT_EQ(values[1], "data2");
+    EXPECT_EQ(values[2], "data3");
+    
+    // 다시 로드 가능 (상태 변경 없음)
+    auto values_again = storage_->Load(group_key);
+    ASSERT_EQ(values_again.size(), 3);
+    EXPECT_EQ(values_again[0], "data1");
+}
+
+TEST_F(GroupStorageTest, LoadVsLoadBatch) {
+    std::string group_key = "test_group";
+    ASSERT_TRUE(storage_->InitializeSession(group_key));
+    
+    // 데이터 저장
+    storage_->Save(group_key, "data1");
+    storage_->Save(group_key, "data2");
+    storage_->Save(group_key, "data3");
+    
+    // 기본 Load (상태 변경 없음)
+    auto values = storage_->Load(group_key);
+    ASSERT_EQ(values.size(), 3);
+    EXPECT_EQ(values[0], "data1");
+    
+    // LoadBatch (상태 변경 포함)
+    auto batches = storage_->LoadBatch(group_key, 100);
+    ASSERT_EQ(batches.size(), 1);
+    EXPECT_EQ(batches[0].data.size(), 3);
+    
+    // LoadBatch 후에도 기본 Load는 여전히 가능 (배치 ACK 전까지)
+    auto values_after = storage_->Load(group_key);
+    ASSERT_EQ(values_after.size(), 3);
+    EXPECT_EQ(values_after[0], "data1");
+    
+    // 배치 ACK 후에는 삭제됨
+    storage_->AcknowledgeBatch(group_key, batches[0].batch_id);
+    auto values_after_ack = storage_->Load(group_key);
+    EXPECT_EQ(values_after_ack.size(), 0); // 삭제됨
+}
+

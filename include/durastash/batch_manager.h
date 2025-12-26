@@ -96,13 +96,39 @@ public:
                          int64_t sequence_end,
                          std::vector<std::string>& keys);
 
+    /**
+     * 배치 메타데이터 키 생성 (내부 사용)
+     */
+    std::string MakeBatchMetadataKey(const std::string& group_key,
+                                     const std::string& session_id,
+                                     const std::string& batch_id);
+
+    /**
+     * sequence_id가 포함된 배치 ID 찾기
+     * @param group_key 그룹 키
+     * @param session_id 세션 ID
+     * @param sequence_id 시퀀스 ID
+     * @return 배치 ID (없으면 빈 문자열)
+     */
+    std::string FindBatchIdBySequenceId(const std::string& group_key,
+                                        const std::string& session_id,
+                                        int64_t sequence_id);
+
+    /**
+     * sequence_id로 데이터 키 생성 (batch_id를 찾아서)
+     * @param group_key 그룹 키
+     * @param session_id 세션 ID
+     * @param sequence_id 시퀀스 ID
+     * @return 데이터 키 (없으면 빈 문자열)
+     */
+    std::string MakeDataKeyBySequenceId(const std::string& group_key,
+                                       const std::string& session_id,
+                                       int64_t sequence_id);
+
 private:
     IStorage* storage_;
     std::mutex mutex_;
 
-    std::string MakeBatchMetadataKey(const std::string& group_key,
-                                     const std::string& session_id,
-                                     const std::string& batch_id);
     std::string MakeDataKey(const std::string& group_key,
                            const std::string& session_id,
                            const std::string& batch_id,

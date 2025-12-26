@@ -110,9 +110,18 @@ bool BatchManager::AcknowledgeBatch(const std::string& group_key,
         return false;
     }
 
-    // 배치 메타데이터 조회
+    // 배치 메타데이터 조회 (이미 mutex 잠금 상태이므로 직접 조회)
+    std::string key = MakeBatchMetadataKey(group_key, session_id, batch_id);
+    std::string json_str;
+    
+    if (!storage_->Get(key, json_str)) {
+        return false;
+    }
+    
     BatchMetadata metadata;
-    if (!GetBatchMetadata(group_key, session_id, batch_id, metadata)) {
+    try {
+        metadata.fromJson(json_str);
+    } catch (...) {
         return false;
     }
 
@@ -203,6 +212,7 @@ void BatchManager::GenerateDataKeys(const std::string& group_key,
 std::string BatchManager::MakeBatchMetadataKey(const std::string& group_key,
                                               const std::string& session_id,
                                               const std::string& batch_id) {
+    // public 메서드로 변경되었으므로 mutex 잠금 불필요 (호출자가 이미 잠금을 가지고 있음)
     return group_key + ":" + session_id + ":batch:" + batch_id;
 }
 
@@ -214,6 +224,54 @@ std::string BatchManager::MakeDataKey(const std::string& group_key,
     oss << group_key << ":" << session_id << ":" << batch_id << ":";
     oss << std::setfill('0') << std::setw(20) << sequence_id;
     return oss.str();
+}
+
+std::string BatchManager::FindBatchIdBySequenceId(const std::string& group_key,
+                                                 const std::string& session_id,
+                                                 int64_t sequence_id) {
+    std::lock_guard<std::mutex> lock(mutex_);
+    
+    if (!storage_) {
+        return "";
+    }
+
+    // 세션의 모든 배치 메타데이터 조회
+    std::string prefix = group_key + ":" + session_id + ":batch:";
+    std::vector<std::string> keys;
+    std::vector<std::string> values;
+    
+    storage_->ScanPrefix(prefix, keys, values);
+
+    // sequence_id가 포함된 배치 찾기
+    for (size_t i = 0; i < keys.size(); ++i) {
+        BatchMetadata metadata;
+        try {
+            metadata.fromJson(values[i]);
+        } catch (...) {
+            continue;
+        }
+        
+        // sequence_id가 이 배치의 범위에 있는지 확인
+        if (sequence_id >= metadata.GetSequenceStart() && 
+            sequence_id <= metadata.GetSequenceEnd()) {
+            return metadata.GetBatchId();
+        }
+    }
+
+    return "";
+}
+
+std::string BatchManager::MakeDataKeyBySequenceId(const std::string& group_key,
+                                                 const std::string& session_id,
+                                                 int64_t sequence_id) {
+    // sequence_id가 포함된 배치 찾기
+    std::string batch_id = FindBatchIdBySequenceId(group_key, session_id, sequence_id);
+    if (batch_id.empty()) {
+        return "";
+    }
+    
+    // 데이터 키 생성
+    return MakeDataKey(group_key, session_id, batch_id, sequence_id);
 }
 
 } // namespace durastash
